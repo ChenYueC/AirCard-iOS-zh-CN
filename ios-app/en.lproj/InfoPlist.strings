@@ -1,0 +1,3 @@
+"CFBundleDisplayName" = "AirCard";
+"NSLocalNetworkUsageDescription" = "AirCard needs local network access to pair with this iPhone, connect to device services, and apply custom artwork.";
+"NSPhotoLibraryUsageDescription" = "AirCard needs access to photos to create and apply custom artwork.";

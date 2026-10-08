@@ -1,0 +1,3 @@
+"CFBundleDisplayName" = "AirCard";
+"NSLocalNetworkUsageDescription" = "AirCard 需要访问本地网络，以提供本机配对服务并连接设备系统服务，应用自定义卡面。";
+"NSPhotoLibraryUsageDescription" = "AirCard 需要访问照片，以制作并应用自定义卡面。";

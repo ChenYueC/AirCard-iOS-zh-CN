@@ -1,0 +1,122 @@
+[
+  {
+    "asset": "MaterialCOMM",
+    "name": "交通银行"
+  },
+  {
+    "asset": "MaterialCMBC",
+    "name": "民生银行"
+  },
+  {
+    "asset": "MaterialPSBC",
+    "name": "邮储银行"
+  },
+  {
+    "asset": "MaterialCCB",
+    "name": "建设银行"
+  },
+  {
+    "asset": "MaterialSPDB",
+    "name": "浦发银行"
+  },
+  {
+    "asset": "MaterialCEB",
+    "name": "光大银行"
+  },
+  {
+    "asset": "MaterialABC",
+    "name": "农业银行"
+  },
+  {
+    "asset": "MaterialBOC",
+    "name": "中国银行"
+  },
+  {
+    "asset": "MaterialTUnion",
+    "name": "交通联合"
+  },
+  {
+    "asset": "MaterialVisaTone",
+    "name": "Visa · 随系统深浅"
+  },
+  {
+    "asset": "MaterialVisaBlue",
+    "name": "Visa · 蓝色"
+  },
+  {
+    "asset": "MaterialVisaNavy",
+    "name": "Visa · 深蓝"
+  },
+  {
+    "asset": "MaterialVisaSilver",
+    "name": "Visa · 金属银"
+  },
+  {
+    "asset": "MaterialMastercard",
+    "name": "Mastercard · 彩色"
+  },
+  {
+    "asset": "MaterialMastercardSilver",
+    "name": "Mastercard · 金属银"
+  },
+  {
+    "asset": "MaterialMastercardWordmark",
+    "name": "Mastercard · 带字版"
+  },
+  {
+    "asset": "MaterialMastercardWordmarkSilver",
+    "name": "Mastercard · 银色带字"
+  },
+  {
+    "asset": "MaterialMastercardClassic",
+    "name": "Mastercard · 经典版"
+  },
+  {
+    "asset": "MaterialUnionPay",
+    "name": "银联 · 彩色"
+  },
+  {
+    "asset": "MaterialUnionPaySilver",
+    "name": "银联 · 金属银"
+  },
+  {
+    "asset": "MaterialUnionPayBordered",
+    "name": "银联 · 白边版"
+  },
+  {
+    "asset": "MaterialUnionPayEnglish",
+    "name": "银联 · 英文版"
+  },
+  {
+    "asset": "MaterialJCB",
+    "name": "JCB"
+  },
+  {
+    "asset": "MaterialApple",
+    "name": "Apple"
+  },
+  {
+    "asset": "MaterialLingnanPass",
+    "name": "岭南通"
+  },
+  {
+    "asset": "MaterialYangChengTong",
+    "name": "羊城通"
+  },
+  {
+    "asset": "MaterialGuangFoTong",
+    "name": "广佛通"
+  },
+  {
+    "asset": "MaterialBeijingTransit",
+    "name": "北京一卡通"
+  },
+  {
+    "asset": "MaterialShanghaiTransit",
+    "name": "上海交通卡"
+  },
+  {
+    "asset": "MaterialXiamenECard",
+    "name": "厦门 e通卡"
+  }
+]

@@ -1,0 +1,126 @@
+name: Build Simplified Chinese IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: ${{ github.event.repository.private == false }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Prepare XcodeGen and check packet handling, card-face models and wallet scanning
+        run: |
+          command -v xcodegen >/dev/null || brew install xcodegen
+          swiftc loopback-vpn/LoopbackPacket.swift tests/loopback-packet/main.swift -o /tmp/aircard-loopback-check
+          /tmp/aircard-loopback-check
+          swiftc ios-app/CardFaceModels.swift tests/card-face-model/main.swift -o /tmp/aircard-face-check
+          /tmp/aircard-face-check
+          swiftc ios-app/WalletScanParser.swift tests/wallet-scan-parser/main.swift -o /tmp/aircard-wallet-scan-check
+          /tmp/aircard-wallet-scan-check
+
+      - name: Restore matching Rust framework
+        id: rust-framework
+        uses: actions/cache@v4
+        with:
+          path: AirliftFFI.xcframework
+          key: airlift-ios-v1-${{ runner.os }}-${{ runner.arch }}-xcode16.4-${{ hashFiles('rust-core/**', 'build-ios.sh', '.github/workflows/build-ipa.yml') }}
+
+      - name: Rebuild Rust framework on cache miss
+        if: steps.rust-framework.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.cargo/bin:$PATH"
+          command -v cargo >/dev/null || brew install rustup
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          cargo test --locked --manifest-path rust-core/Cargo.toml --lib
+          bash build-ios.sh
+
+      - name: Validate Rust framework slices
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import plistlib
+
+          root = pathlib.Path("AirliftFFI.xcframework")
+          info = plistlib.loads((root / "Info.plist").read_bytes())
+          variants = set()
+          for library in info["AvailableLibraries"]:
+              assert library["SupportedPlatform"] == "ios"
+              assert "arm64" in library["SupportedArchitectures"]
+              folder = root / library["LibraryIdentifier"]
+              assert (folder / library["LibraryPath"]).stat().st_size > 0
+              assert (folder / library["HeadersPath"] / "airlift.h").is_file()
+              variants.add(library.get("SupportedPlatformVariant", "device"))
+          assert variants == {"device", "simulator"}
+          print("Matching Rust framework: arm64 device and simulator slices validated")
+          PY
+
+      - name: Build unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash build-ipa.sh 2>&1 | tee build-ipa.log
+
+      - name: Validate IPA contents
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import plistlib
+          import zipfile
+
+          with zipfile.ZipFile("build/AirCard-iOS.ipa") as ipa:
+              assert ipa.testzip() is None, "Corrupt IPA archive"
+              app = "Payload/AirCard-iOS.app/"
+              info = plistlib.loads(ipa.read(app + "Info.plist"))
+              assert info["CFBundleIdentifier"] == "com.wallet.aircard"
+              assert info["CFBundleDevelopmentRegion"] == "zh-Hans"
+              assert "zh-Hans" in info["CFBundleLocalizations"]
+              assert ipa.getinfo(app + info["CFBundleExecutable"]).file_size > 0
+              extension = app + "PlugIns/LoopbackVPN.appex/"
+              ext_info = plistlib.loads(ipa.read(extension + "Info.plist"))
+              assert ext_info["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.networkextension.packet-tunnel"
+              assert ipa.getinfo(extension + ext_info["CFBundleExecutable"]).file_size > 0
+              for bundle in [app, extension]:
+                  entitlements = plistlib.loads(ipa.read(bundle + "RequiredVPN.entitlements"))
+                  assert entitlements["com.apple.developer.networking.networkextension"] == ["packet-tunnel-provider"]
+              assert not any("Tendies" in name or "RespringHelper" in name for name in ipa.namelist())
+              print("IPA, Chinese metadata, embedded VPN and signing templates validated")
+          PY
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AirCard-iOS-zh-CN-unsigned
+          path: build/AirCard-iOS.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build-ipa.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload generated Xcode project
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-xcode-project
+          path: AirCard-iOS.xcodeproj/
+          retention-days: 7
