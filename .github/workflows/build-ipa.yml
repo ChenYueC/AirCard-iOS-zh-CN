@@ -1,3 +1,4 @@
+# Manual unsigned IPA builds for this repository.
 name: Build Simplified Chinese IPA
 
 on:
