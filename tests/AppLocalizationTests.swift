@@ -49,6 +49,7 @@ final class AppLocalizationTests: XCTestCase {
     }
 
     func testArtworkFailureMessagesKeepPrefixesAndTranslateDetails() {
+        XCTAssertEqual(AppTranslation.translate("暂无需要更新的卡面"), "No card faces need updating.")
         XCTAssertEqual(AppTranslation.translate("  卡面已写入，正在清除卡片缓存…"), "  Artwork written. Clearing card caches…")
         XCTAssertEqual(
             AppTranslation.translate("  ⚠️ 卡面已写入，但缓存刷新未完成，已保留恢复入口：.cache: 缓存文件操作失败。"),

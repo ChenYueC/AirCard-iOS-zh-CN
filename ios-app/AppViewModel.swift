@@ -40,6 +40,7 @@ final class AppViewModel: ObservableObject {
     @Published var cardFlashPhase: FlashPhase = .idle
     @Published var cardFlashProgress: Double = 0
     @Published var cardFlashLog: [String] = []
+    @Published var cardToast: AppToast?
     @Published private(set) var restoringCardID: String?
     @Published private var replacementRecords: [String: CardReplacementRecord] = [:]
     @Published private(set) var originalCardPreviews: [String: UIImage] = [:]
@@ -463,8 +464,8 @@ final class AppViewModel: ObservableObject {
         cards = unique.filter { !Self.dummyCardHashes.contains($0) }.map { id in
             let path = Self.cardImagePath(for: id)
             let data = try? Data(contentsOf: path)
-            // Downsampled thumbnail keeps RAM minimal, preventing Jetsam OOM kills
-            let img = data.flatMap { ImageEngine.safeImageFromData($0, maxDimension: 512) }
+            // Keep enough pixels for the full-width card on Retina displays.
+            let img = data.flatMap { ImageEngine.safeImageFromData($0, maxDimension: 1536) }
             return CardItem(id: id, name: names[id].flatMap { CardItem.cleanName($0) }, customImageData: data, customImage: img)
         }
         originalCardPreviews = [:]
@@ -726,16 +727,20 @@ final class AppViewModel: ObservableObject {
         if replacementRecords[id] != record { replacementRecords[id] = record }
     }
 
-    private nonisolated static func saveReplacementRecord(id: String, pairingPath: String, status: CardReplacementRecord.Status) throws {
+    private nonisolated static func saveReplacementRecord(id: String, pairingPath: String, status: CardReplacementRecord.Status, appliedImageFingerprint: String? = nil) throws {
         let pairing = try Data(contentsOf: URL(fileURLWithPath: pairingPath))
         let fingerprint = SHA256.hash(data: pairing).map { String(format: "%02x", $0) }.joined()
-        let record = CardReplacementRecord(cardID: id, pairingFingerprint: fingerprint, status: status)
         let url = originalCardBackupURL(for: id).appendingPathComponent("replacement.json")
+        let previous = try? CardReplacementRecord.load(from: url)
+        let wasReplaced = previous?.matches(cardID: id, pairingFingerprint: fingerprint) == true && previous?.hasReplacedCardFace == true
+        let record = CardReplacementRecord(cardID: id, pairingFingerprint: fingerprint, status: status,
+                                           successfulReplacement: wasReplaced || status == .replaced,
+                                           appliedImageFingerprint: appliedImageFingerprint)
         try record.save(to: url)
     }
 
     func isCardFaceReplaced(for id: String) -> Bool {
-        replacementRecords[id]?.status == .replaced
+        replacementRecords[id]?.hasReplacedCardFace == true
     }
 
     func canRestoreOriginalCardFace(for id: String) -> Bool {
@@ -845,7 +850,7 @@ final class AppViewModel: ObservableObject {
         } catch {
             let data = try? Data(contentsOf: path)
             cards[index].customImageData = data
-            cards[index].customImage = data.flatMap { ImageEngine.safeImageFromData($0, maxDimension: 512) }
+            cards[index].customImage = data.flatMap { ImageEngine.safeImageFromData($0, maxDimension: 1536) }
             errorMessage = "清除已选图片失败：\(error.localizedDescription)"
             return
         }
@@ -860,7 +865,7 @@ final class AppViewModel: ObservableObject {
     func setCardImage(for cardId: String, image: UIImage) {
         guard !cardOperationRunning else { return }
         guard let idx = cards.firstIndex(where: { $0.id == cardId }) else { return }
-        let thumb = ImageEngine.normalizeAndDownsample(image, maxDimension: 512)
+        let thumb = ImageEngine.normalizeAndDownsample(image, maxDimension: 1536)
         cards[idx].customImage = thumb
 
         let actualId = cards[idx].id
@@ -882,7 +887,7 @@ final class AppViewModel: ObservableObject {
                 } catch {
                     let data = try? Data(contentsOf: path)
                     vm.cards[index].customImageData = data
-                    vm.cards[index].customImage = data.flatMap { ImageEngine.safeImageFromData($0, maxDimension: 512) }
+                    vm.cards[index].customImage = data.flatMap { ImageEngine.safeImageFromData($0, maxDimension: 1536) }
                     vm.errorMessage = "保存已选图片失败：\(error.localizedDescription)"
                 }
             }
@@ -895,13 +900,27 @@ final class AppViewModel: ObservableObject {
         hasPairingFile &&
         !cardOperationRunning &&
         !cards.contains { $0.isSelected && pendingCardImageIDs.contains($0.id) } &&
-        cards.contains { $0.isSelected && ($0.customImage != nil || $0.customImageData != nil) }
+        !cards.isEmpty
+    }
+
+    private nonisolated static func imageFingerprint(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     func flashCards() {
         guard canFlashCards else { return }
-        let selected = cards.filter { $0.isSelected && ($0.customImage != nil || $0.customImageData != nil) }
-        guard !selected.isEmpty else { return }
+        for card in cards where card.isSelected { reloadReplacementRecord(for: card.id) }
+        let selected = cards.filter { card in
+            guard card.isSelected, card.customImage != nil || card.customImageData != nil else { return false }
+            let recovery = Self.originalCardBackupURL(for: card.id).appendingPathComponent("recovery.json")
+            if FileManager.default.fileExists(atPath: recovery.path) { return true }
+            guard let data = card.customImageData ?? (try? Data(contentsOf: Self.cardImagePath(for: card.id))) else { return true }
+            return replacementRecords[card.id]?.needsApplication(imageFingerprint: Self.imageFingerprint(data)) ?? true
+        }
+        guard !selected.isEmpty else {
+            cardToast = AppToast(message: "暂无需要更新的卡面")
+            return
+        }
 
         cardFlashPhase    = .running
         cardFlashProgress = 0
@@ -1080,6 +1099,17 @@ final class AppViewModel: ObservableObject {
                 if !cacheErrors.isEmpty {
                     let detail = cacheErrors.joined(separator: "；")
                     await MainActor.run { self.cardFlashLog.append("  ⚠️ 卡面已写入，但缓存刷新未完成，已保留恢复入口：\(detail)") }
+                    continue
+                }
+
+                // Deduplicate only fully completed applications; failed cache writes remain retryable.
+                do {
+                    let data = try card.customImageData ?? Data(contentsOf: Self.cardImagePath(for: cleanId))
+                    try Self.saveReplacementRecord(id: cleanId, pairingPath: pairingPath, status: .replaced,
+                                                   appliedImageFingerprint: Self.imageFingerprint(data))
+                    await MainActor.run { self.reloadReplacementRecord(for: cleanId) }
+                } catch {
+                    await MainActor.run { self.cardFlashLog.append("  ⚠️ 卡面与缓存已更新，但应用记录保存失败，请重试：\(error.localizedDescription)") }
                     continue
                 }
 

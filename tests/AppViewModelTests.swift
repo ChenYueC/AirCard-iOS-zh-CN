@@ -53,6 +53,7 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertTrue(vm.canFlashCards)
         vm.setCardImage(for: id, image: intermediate)
         vm.setCardImage(for: id, image: selected)
+        XCTAssertEqual(vm.cards[0].customImage?.cgImage?.width, 1536)
         // The main actor cannot commit either detached encoder before these assertions.
         XCTAssertEqual(vm.pendingCardImageIDs, [id])
         XCTAssertFalse(vm.canFlashCards)
@@ -66,10 +67,34 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: path), vm.cards[0].customImageData)
     }
 
+    func testNoPendingImagesShowsToastWithoutStartingDeviceWork() {
+        let previous = AppViewModel.shared
+        let previousSink = AppViewModel.sharedLogSink
+        defer {
+            AppViewModel.shared = previous
+            AppViewModel.sharedLogSink = previousSink
+        }
+        let vm = AppViewModel()
+        vm.cards = [CardItem(id: "abcdefghijklmnopqrstuvwxyza=")]
+        vm.hasPairingFile = true
+        vm.cardFlashLog = ["existing log"]
+        vm.flashCards()
+        XCTAssertEqual(vm.cardToast?.message, "暂无需要更新的卡面")
+        XCTAssertEqual(vm.cardFlashPhase, .idle)
+        XCTAssertEqual(vm.cardFlashLog, ["existing log"])
+        vm.cards[0].customImage = image(.red)
+        vm.cards[0].isSelected = false
+        vm.flashCards()
+        XCTAssertEqual(vm.cardFlashPhase, .idle)
+        XCTAssertEqual(vm.cardToast?.message, "暂无需要更新的卡面")
+    }
+
     private func image(_ color: UIColor) -> UIImage {
-        UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).image { context in
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: 1536, height: 969), format: format).image { context in
             color.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
+            context.fill(CGRect(x: 0, y: 0, width: 1536, height: 969))
         }
     }
 }

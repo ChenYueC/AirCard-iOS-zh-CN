@@ -36,4 +36,32 @@ final class CardReplacementRecordTests: XCTestCase {
         let invalid = Data(#"{"version":1,"cardID":"card","pairingFingerprint":"device","status":"unknown"}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(CardReplacementRecord.self, from: invalid))
     }
+
+    func testCheckmarkPersistsDuringSubsequentWritesAndResetsAfterRestore() throws {
+        let firstWrite = CardReplacementRecord(cardID: id, pairingFingerprint: pairing, status: .writing)
+        XCTAssertFalse(firstWrite.hasReplacedCardFace)
+        let completed = CardReplacementRecord(cardID: id, pairingFingerprint: pairing, status: .replaced,
+                                               successfulReplacement: true, appliedImageFingerprint: "image-a")
+        XCTAssertTrue(completed.hasReplacedCardFace)
+        let updating = CardReplacementRecord(cardID: id, pairingFingerprint: pairing, status: .writing,
+                                              successfulReplacement: completed.hasReplacedCardFace)
+        let reloaded = try JSONDecoder().decode(CardReplacementRecord.self, from: JSONEncoder().encode(updating))
+        XCTAssertTrue(reloaded.hasReplacedCardFace)
+        XCTAssertTrue(reloaded.status.needsRestoration)
+        XCTAssertTrue(reloaded.needsApplication(imageFingerprint: "image-a"))
+        let restored = CardReplacementRecord(cardID: id, pairingFingerprint: pairing, status: .original,
+                                              successfulReplacement: true, appliedImageFingerprint: "image-a")
+        XCTAssertFalse(restored.hasReplacedCardFace)
+        XCTAssertNil(restored.appliedImageFingerprint)
+    }
+
+    func testOnlyCompletedMatchingImageIsSkipped() throws {
+        let completed = CardReplacementRecord(cardID: id, pairingFingerprint: pairing, status: .replaced,
+                                               successfulReplacement: true, appliedImageFingerprint: "image-a")
+        let reloaded = try JSONDecoder().decode(CardReplacementRecord.self, from: JSONEncoder().encode(completed))
+        XCTAssertFalse(reloaded.needsApplication(imageFingerprint: "image-a"))
+        XCTAssertTrue(reloaded.needsApplication(imageFingerprint: "image-b"))
+        let cacheIncomplete = CardReplacementRecord(cardID: id, pairingFingerprint: pairing, status: .replaced)
+        XCTAssertTrue(cacheIncomplete.needsApplication(imageFingerprint: "image-a"))
+    }
 }

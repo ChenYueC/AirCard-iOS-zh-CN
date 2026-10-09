@@ -327,5 +327,7 @@
   "连接设备日志超时，请解锁设备并检查连接后重试。": "Connecting to device logs timed out. Unlock the device and check the connection before retrying.",
   "保存 Books 状态失败：{0}": "Saving the Books sync state failed: {0}",
   "关闭 Books 状态文件失败：{0}": "Closing the Books sync state file failed: {0}",
-  "恢复 Books 状态失败：{0}": "Restoring the Books sync state failed: {0}"
+  "恢复 Books 状态失败：{0}": "Restoring the Books sync state failed: {0}",
+  "暂无需要更新的卡面": "No card faces need updating.",
+  "  ⚠️ 卡面与缓存已更新，但应用记录保存失败，请重试：{0}": "  ⚠️ Artwork and caches were updated, but saving the apply record failed. Please retry: {0}"
 }

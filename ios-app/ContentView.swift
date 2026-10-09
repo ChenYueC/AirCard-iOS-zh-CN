@@ -730,6 +730,7 @@ struct WalletCardView: View {
                         ZStack(alignment: .topTrailing) {
                             Image(uiImage: img)
                                 .resizable()
+                                .interpolation(.high)
                                 .scaledToFill()
                                 .frame(width: width, height: height)
                                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -1037,6 +1038,7 @@ struct WalletCardsTab: View {
             }
             .transaction { $0.animation = nil }
             .scrollDisabled(cardDrag != nil)
+            .toast($vm.cardToast)
             .onChange(of: cardDrag?.id) { _, id in
                 if id != nil { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
             }
